@@ -19,7 +19,6 @@ plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'sans-serif']
 
 # 2. 解决保存图像时负号 '-' 显示为方块的问题
 plt.rcParams['axes.unicode_minus'] = False
-
 # ── 配置区 ────────────────────────────────────────────────────────────────────
 INPUT_FILE   = "../data/cleaned_coins.json"
 OUTPUT_FILE  = "../data/clustered_coins.json"
@@ -237,7 +236,7 @@ if __name__ == "__main__":
     best_k = elbow_method(X)
 
     # ④ 允许手动覆盖 K（看完肘部图觉得推荐值不对时，改这里）
-    # best_k = 5   # ← 取消注释并改成你认为合适的值
+    # best_k = 7   # ← 取消注释并改成你认为合适的值
 
     # ⑤ KMeans 聚类
     labels = run_kmeans(X, best_k)
