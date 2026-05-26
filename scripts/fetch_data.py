@@ -13,7 +13,7 @@ from datetime import datetime
 BASE_URL   = "https://api.coingecko.com/api/v3/coins/markets"
 VS_CURRENCY = "usd"          # 计价货币
 PER_PAGE   = 250             # 每页最多 250 条（CoinGecko 上限）
-TOTAL_PAGES = 4              # 抓取页数：4 页 × 250 = 1000 条
+TOTAL_PAGES = 3              # 抓取页数：4 页 × 250 = 1000 条
 SLEEP_SEC  = 1.5             # 每次请求之间的等待秒数（避免被限速）
 OUTPUT_DIR = "../data"       # 输出目录（相对于 scripts/ 的路径）
 OUTPUT_FILE = "raw_coins.json"

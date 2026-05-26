@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Cluster · CoinGecko 市场分群分析</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  /* ── 设计系统变量 ─────────────────────────────────────────── */
+  :root {
+    --bg:        #0a0c10;
+    --surface:   #111318;
+    --border:    #1e2230;
+    --text:      #e8eaf0;
+    --muted:     #5a6070;
+    --accent:    #00e5ff;
+    --accent2:   #ff6b35;
+
+    /* cluster 颜色组 */
+    --c0: #00e5ff;
+    --c1: #ff6b35;
+    --c2: #a78bfa;
+    --c3: #34d399;
+    --c4: #fbbf24;
+    --c5: #f472b6;
+    --c6: #60a5fa;
+    --c7: #fb923c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── 背景网格纹理 ─────────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* ── 顶部 Header ──────────────────────────────────────────── */
+  header {
+    position: relative; z-index: 1;
+    padding: 2.5rem 3rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .logo-area h1 {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .logo-area h1 span { color: var(--accent); }
+
+  .logo-area p {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  #meta-info {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.8;
+  }
+  #meta-info strong { color: var(--accent); }
+
+  /* ── 主内容区 ─────────────────────────────────────────────── */
+  main {
+    position: relative; z-index: 1;
+    padding: 2rem 3rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  /* ── 通用卡片 ─────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 0.72rem;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card-title::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  /* ── 上方双栏：散点图 + 雷达图 ───────────────────────────── */
+  .charts-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 1.5rem;
+  }
+
+  #scatter-chart { width: 100%; height: 480px; }
+  #radar-chart   { width: 100%; height: 480px; }
+
+  /* ── 控制栏 ───────────────────────────────────────────────── */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .cluster-btn {
+    padding: 0.35rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .cluster-btn.active {
+    border-color: var(--active-color, var(--accent));
+    background: color-mix(in srgb, var(--active-color, var(--accent)) 15%, transparent);
+    color: var(--active-color, var(--accent));
+  }
+  .cluster-btn:hover:not(.active) {
+    border-color: var(--muted);
+    color: var(--text);
+  }
+
+  .search-box {
+    margin-left: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.35rem 0.8rem;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    width: 200px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+
+  /* ── 表格 ─────────────────────────────────────────────────── */
+  .table-wrapper {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 380px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+
+  thead {
+    position: sticky; top: 0; z-index: 2;
+    background: #161920;
+  }
+
+  th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+  }
+  th:hover { color: var(--accent); }
+  th.sort-asc::after  { content: ' ▲'; color: var(--accent); }
+  th.sort-desc::after { content: ' ▼'; color: var(--accent); }
+
+  td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tbody tr:hover td { background: rgba(255,255,255,0.03); }
+
+  .cluster-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    border: 1px solid currentColor;
+  }
+
+  .coin-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .coin-name img {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .coin-symbol {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .num { font-family: 'Space Mono', monospace; }
+  .up   { color: #34d399; }
+  .down { color: #f87171; }
+
+  /* ── 详情弹窗 ─────────────────────────────────────────────── */
+  #detail-panel {
+    position: fixed;
+    right: -360px; top: 0; bottom: 0;
+    width: 340px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 100;
+    padding: 2rem 1.5rem;
+    transition: right 0.3s cubic-bezier(.4,0,.2,1);
+    overflow-y: auto;
+  }
+  #detail-panel.open { right: 0; }
+
+  #detail-close {
+    position: absolute; top: 1rem; right: 1rem;
+    background: none; border: none;
+    color: var(--muted); font-size: 1.2rem;
+    cursor: pointer; line-height: 1;
+    transition: color 0.2s;
+  }
+  #detail-close:hover { color: var(--text); }
+
+  #detail-name {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin: 0.5rem 0 0.2rem;
+  }
+  #detail-symbol {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--muted); font-size: 0.72rem; }
+  .detail-value { font-family: 'Space Mono', monospace; }
+
+  /* ── 加载状态 ─────────────────────────────────────────────── */
+  #loading {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1rem;
+  }
+
+  .loader-ring {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #loading p {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── 错误提示 ─────────────────────────────────────────────── */
+  #error-msg {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 1rem;
+    text-align: center; padding: 2rem;
+  }
+  #error-msg h2 { color: #f87171; }
+  #error-msg pre {
+    background: var(--surface);
+    padding: 1rem; border-radius: 8px;
+    font-size: 0.75rem; color: var(--muted);
+    max-width: 500px; white-space: pre-wrap;
+  }
+
+  /* ── 响应式 ───────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    header, main { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .charts-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 加载遮罩 -->
+<div id="loading">
+  <div class="loader-ring"></div>
+  <p>LOADING DATA...</p>
+</div>
+
+<!-- 错误提示 -->
+<div id="error-msg">
+  <h2>⚠ 无法加载数据</h2>
+  <pre id="error-detail"></pre>
+  <p style="color:var(--muted);font-size:0.8rem">
+    请确认 <code>data/result.json</code> 文件存在，<br>
+    并通过本地服务器访问（不能直接双击打开 HTML）。<br><br>
+    <strong>快速启动服务器：</strong><br>
+    <code>cd frontend && python3 -m http.server 8080</code>
+  </p>
+</div>
+
+<!-- 顶部导航 -->
+<header>
+  <div class="logo-area">
+    <h1>CRYPTO <span>CLUSTER</span></h1>
+    <p>COINGECKO · KMEANS CLUSTERING · PCA VISUALIZATION</p>
+  </div>
+  <div id="meta-info">加载中...</div>
+</header>
+
+<main>
+  <!-- 散点图 + 雷达图 -->
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">PCA 散点图 · 点击币种查看详情</div>
+      <div id="scatter-chart"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">雷达图 · 各群组特征对比</div>
+      <div id="radar-chart"></div>
+    </div>
+  </div>
+
+  <!-- 表格 -->
+  <div class="card">
+    <div class="card-title">数据表格</div>
+    <div class="controls" id="filter-controls">
+      <!-- 由 JS 动态生成群组筛选按钮 -->
+      <input class="search-box" id="search-input" type="text" placeholder="搜索币种名称 / symbol...">
+    </div>
+    <div class="table-wrapper">
+      <table id="coins-table">
+        <thead>
+          <tr>
+            <th data-col="name">币种</th>
+            <th data-col="cluster">分群</th>
+            <th data-col="market_cap_rank">排名</th>
+            <th data-col="current_price">价格 (USD)</th>
+            <th data-col="market_cap">市值</th>
+            <th data-col="total_volume">交易量(24h)</th>
+            <th data-col="price_change_percentage_24h">涨跌幅(24h)</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <p id="table-count" style="margin-top:0.75rem;font-size:0.72rem;color:var(--muted);font-family:'Space Mono',monospace;"></p>
+  </div>
+</main>
+
+<!-- 详情侧边栏 -->
+<div id="detail-panel">
+  <button id="detail-close">✕</button>
+  <img id="detail-img" src="" width="40" height="40" style="border-radius:50%;display:block">
+  <div id="detail-name"></div>
+  <div id="detail-symbol"></div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════════════════════════════
+const CLUSTER_COLORS = ['#00e5ff','#ff6b35','#a78bfa','#34d399','#fbbf24','#f472b6','#60a5fa','#fb923c'];
+
+function clusterColor(id) { return CLUSTER_COLORS[id % CLUSTER_COLORS.length]; }
+
+function fmt(n, digits = 2) {
+  if (n == null) return '—';
+  if (Math.abs(n) >= 1e9)  return (n / 1e9).toFixed(2)  + 'B';
+  if (Math.abs(n) >= 1e6)  return (n / 1e6).toFixed(2)  + 'M';
+  if (Math.abs(n) >= 1e3)  return (n / 1e3).toFixed(2)  + 'K';
+  return Number(n).toFixed(digits);
+}
+
+function fmtPrice(p) {
+  if (p == null) return '—';
+  if (p >= 1000) return '$' + p.toLocaleString('en-US', {maximumFractionDigits: 0});
+  if (p >= 1)    return '$' + p.toFixed(4);
+  return '$' + p.toFixed(8);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 全局状态
+// ═══════════════════════════════════════════════════════════════
+let ALL_COINS = [];
+let CLUSTER_STATS = [];
+let activeCluster = null;   // null = 全部显示
+let searchQuery = '';
+let sortCol = 'market_cap_rank';
+let sortDir = 'asc';
+let scatterChart, radarChart;
+
+// ═══════════════════════════════════════════════════════════════
+// 加载数据
+// ═══════════════════════════════════════════════════════════════
+async function loadData() {
+  try {
+    const res = await fetch('../data/result.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    const data = await res.json();
+
+    ALL_COINS     = data.coins;
+    CLUSTER_STATS = data.cluster_stats;
+
+    // 更新顶部 meta
+    const clusterCount = data.meta.total_clusters;
+    document.getElementById('meta-info').innerHTML =
+      `<strong>${ALL_COINS.length.toLocaleString()}</strong> 币种 &nbsp;·&nbsp; ` +
+      `<strong>${clusterCount}</strong> 个群组 &nbsp;·&nbsp; ` +
+      `数据来源：CoinGecko`;
+
+    document.getElementById('loading').style.display = 'none';
+    initAll();
+
+  } catch (err) {
+    document.getElementById('loading').style.display = 'none';
+    const errEl = document.getElementById('error-msg');
+    errEl.style.display = 'flex';
+    document.getElementById('error-detail').textContent = err.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 初始化所有组件
+// ═══════════════════════════════════════════════════════════════
+function initAll() {
+  buildFilterButtons();
+  initScatter();
+  initRadar();
+  renderTable();
+  initSearch();
+  initTableSort();
+  initDetailClose();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 筛选按钮
+// ═══════════════════════════════════════════════════════════════
+function buildFilterButtons() {
+  const container = document.getElementById('filter-controls');
+  const allBtn = document.createElement('button');
+  allBtn.className = 'cluster-btn active';
+  allBtn.textContent = '全部';
+  allBtn.style.setProperty('--active-color', 'var(--accent)');
+  allBtn.addEventListener('click', () => setActiveCluster(null));
+  container.prepend(allBtn);
+
+  CLUSTER_STATS.forEach(s => {
+    const btn = document.createElement('button');
+    const color = clusterColor(s.cluster);
+    btn.className = 'cluster-btn';
+    btn.style.setProperty('--active-color', color);
+    btn.textContent = `Cluster ${s.cluster}  (${s.count})`;
+    btn.dataset.cluster = s.cluster;
+    btn.addEventListener('click', () => setActiveCluster(s.cluster));
+    container.insertBefore(btn, document.getElementById('search-input'));
+  });
+}
+
+function setActiveCluster(id) {
+  activeCluster = id;
+  document.querySelectorAll('.cluster-btn').forEach(btn => {
+    if (id === null) {
+      btn.classList.toggle('active', btn.textContent.startsWith('全部'));
+    } else {
+      btn.classList.toggle('active', String(btn.dataset.cluster) === String(id));
+    }
+  });
+  renderTable();
+  updateScatterHighlight();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 散点图
+// ═══════════════════════════════════════════════════════════════
+function initScatter() {
+  scatterChart = echarts.init(document.getElementById('scatter-chart'), 'dark');
+
+  // 按 cluster 分组
+  const seriesMap = {};
+  ALL_COINS.forEach(c => {
+    if (!seriesMap[c.cluster]) seriesMap[c.cluster] = [];
+    seriesMap[c.cluster].push({
+      value: [c.pca_x, c.pca_y],
+      name: c.name,
+      coin: c,
+    });
+  });
+
+  const series = Object.entries(seriesMap).map(([cid, pts]) => ({
+    name: `Cluster ${cid}`,
+    type: 'scatter',
+    data: pts,
+    symbolSize: 6,
+    itemStyle: {
+      color: clusterColor(Number(cid)),
+      opacity: 0.75,
+    },
+    emphasis: {
+      itemStyle: { opacity: 1, borderWidth: 2, borderColor: '#fff' },
+      label: {
+        show: true,
+        formatter: p => p.data.name,
+        color: '#fff',
+        fontSize: 11,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: [3, 6],
+        borderRadius: 4,
+      },
+    },
+  }));
+
+  scatterChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: '#161920',
+      borderColor: '#1e2230',
+      textStyle: { color: '#e8eaf0', fontFamily: 'Space Mono', fontSize: 11 },
+      formatter: p => {
+        const c = p.data.coin;
+        const chg = c.price_change_percentage_24h;
+        const chgStr = chg != null
+          ? `<span style="color:${chg >= 0 ? '#34d399' : '#f87171'}">${chg >= 0 ? '+' : ''}${chg?.toFixed(2)}%</span>`
+          : '—';
+        return `<b>${c.name}</b> <span style="color:#5a6070">${c.symbol?.toUpperCase()}</span><br>
+                价格：${fmtPrice(c.current_price)}<br>
+                涨跌：${chgStr}<br>
+                市值排名：#${c.market_cap_rank ?? '—'}<br>
+                <span style="color:#5a6070">Cluster ${c.cluster}</span>`;
+      },
+    },
+    legend: {
+      top: 4, right: 8,
+      textStyle: { color: '#5a6070', fontFamily: 'Space Mono', fontSize: 10 },
+      itemWidth: 10, itemHeight: 10,
+    },
+    xAxis: { show: false },
+    yAxis: { show: false },
+    grid: { top: 40, bottom: 10, left: 10, right: 10 },
+    series,
+  });
+
+  // 点击散点 → 打开详情
+  scatterChart.on('click', params => {
+    if (params.data?.coin) openDetail(params.data.coin);
+  });
+
+  window.addEventListener('resize', () => scatterChart.resize());
+}
+
+function updateScatterHighlight() {
+  if (!scatterChart) return;
+  const option = scatterChart.getOption();
+  option.series.forEach(s => {
+    const cid = parseInt(s.name.replace('Cluster ', ''));
+    s.itemStyle = [{
+      ...s.itemStyle[0],
+      opacity: (activeCluster === null || cid === activeCluster) ? 0.75 : 0.08,
+    }];
+  });
+  scatterChart.setOption(option);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 雷达图
+// ═══════════════════════════════════════════════════════════════
+function initRadar() {
+  radarChart = echarts.init(document.getElementById('radar-chart'), 'dark');
+
+  // 用对数归一化，让各维度可比
+  const featureKeys = ['current_price','market_cap','total_volume',
+                       'price_change_percentage_24h','market_cap_rank'];
+  const featureLabels = ['价格','市值','交易量','涨跌幅','市值排名'];
+
+  // 每个特征在所有 cluster 中的最大值（用于归一化）
+  const maxVals = featureKeys.map(k =>
+    Math.max(...CLUSTER_STATS.map(s => Math.abs(s.features[k]?.mean ?? 0)))
+  );
+
+  const indicators = featureLabels.map((name, i) => ({
+    name,
+    max: maxVals[i] > 0 ? maxVals[i] * 1.2 : 1,
+  }));
+
+  const seriesData = CLUSTER_STATS.map(s => ({
+    name: `Cluster ${s.cluster}`,
+    value: featureKeys.map(k => Math.abs(s.features[k]?.mean ?? 0)),
+    itemStyle: { color: clusterColor(s.cluster) },
+    lineStyle: { color: clusterColor(s.cluster), width: 2 },
+    areaStyle: { color: clusterColor(s.cluster), opacity: 0.08 },
+  }));
+
+  radarChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      backgroundColor: '#161920',
+      borderColor: '#1e2230',
+      textStyle: { color: '#e8eaf0', fontFamily: 'Space Mono', fontSize: 11 },
+    },
+    legend: {
+      bottom: 8,
+      textStyle: { color: '#5a6070', fontFamily: 'Space Mono', fontSize: 10 },
+      itemWidth: 10, itemHeight: 10,
+    },
+    radar: {
+      center: ['50%', '48%'],
+      radius: '62%',
+      indicator: indicators,
+      axisName: { color: '#5a6070', fontSize: 11, fontFamily: 'Space Mono' },
+      splitLine: { lineStyle: { color: '#1e2230' } },
+      splitArea: { areaStyle: { color: ['rgba(255,255,255,0.01)', 'transparent'] } },
+      axisLine: { lineStyle: { color: '#1e2230' } },
+    },
+    series: [{
+      type: 'radar',
+      data: seriesData,
+    }],
+  });
+
+  window.addEventListener('resize', () => radarChart.resize());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 表格渲染
+// ═══════════════════════════════════════════════════════════════
+function filteredCoins() {
+  let coins = ALL_COINS;
+  if (activeCluster !== null) coins = coins.filter(c => c.cluster === activeCluster);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    coins = coins.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.symbol?.toLowerCase().includes(q) ||
+      c.id?.toLowerCase().includes(q)
+    );
+  }
+  // 排序
+  coins = [...coins].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+  return coins;
+}
+
+function renderTable() {
+  const coins = filteredCoins();
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+
+  coins.forEach(c => {
+    const chg = c.price_change_percentage_24h;
+    const color = clusterColor(c.cluster);
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.innerHTML = `
+      <td>
+        <div class="coin-name">
+          ${c.image ? `<img src="${c.image}" alt="${c.name}" onerror="this.style.display='none'">` : ''}
+          <span>${c.name ?? '—'}</span>
+          <span class="coin-symbol">${c.symbol?.toUpperCase() ?? ''}</span>
+        </div>
+      </td>
+      <td>
+        <span class="cluster-badge" style="color:${color};border-color:${color}">
+          ${c.cluster}
+        </span>
+      </td>
+      <td class="num">${c.market_cap_rank != null ? '#' + c.market_cap_rank : '—'}</td>
+      <td class="num">${fmtPrice(c.current_price)}</td>
+      <td class="num">${fmt(c.market_cap)}</td>
+      <td class="num">${fmt(c.total_volume)}</td>
+      <td class="num ${chg >= 0 ? 'up' : 'down'}">
+        ${chg != null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '—'}
+      </td>
+    `;
+    tr.addEventListener('click', () => openDetail(c));
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('table-count').textContent =
+    `显示 ${coins.length} / ${ALL_COINS.length} 条`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 搜索
+// ═══════════════════════════════════════════════════════════════
+function initSearch() {
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchQuery = e.target.value.trim();
+    renderTable();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 表格排序
+// ═══════════════════════════════════════════════════════════════
+function initTableSort() {
+  document.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = 'asc';
+      }
+      document.querySelectorAll('th').forEach(t => t.classList.remove('sort-asc','sort-desc'));
+      th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+      renderTable();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 详情侧边栏
+// ═══════════════════════════════════════════════════════════════
+function openDetail(coin) {
+  const panel = document.getElementById('detail-panel');
+  const color = clusterColor(coin.cluster);
+
+  document.getElementById('detail-img').src = coin.image ?? '';
+  document.getElementById('detail-img').style.display = coin.image ? 'block' : 'none';
+  document.getElementById('detail-name').textContent = coin.name ?? '—';
+  document.getElementById('detail-name').style.color = color;
+  document.getElementById('detail-symbol').textContent =
+    `${coin.symbol?.toUpperCase() ?? ''} · Cluster ${coin.cluster}`;
+
+  const chg = coin.price_change_percentage_24h;
+  const rows = [
+    ['市值排名',    coin.market_cap_rank != null ? '#' + coin.market_cap_rank : '—'],
+    ['当前价格',    fmtPrice(coin.current_price)],
+    ['市值',        '$' + fmt(coin.market_cap)],
+    ['24h 交易量',  '$' + fmt(coin.total_volume)],
+    ['24h 涨跌幅',  chg != null
+      ? `<span class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`
+      : '—'],
+    ['PCA X',       coin.pca_x?.toFixed(4) ?? '—'],
+    ['PCA Y',       coin.pca_y?.toFixed(4) ?? '—'],
+  ];
+
+  document.getElementById('detail-body').innerHTML = rows.map(([label, val]) => `
+    <div class="detail-row">
+      <span class="detail-label">${label}</span>
+      <span class="detail-value">${val}</span>
+    </div>
+  `).join('');
+
+  panel.classList.add('open');
+}
+
+function initDetailClose() {
+  document.getElementById('detail-close').addEventListener('click', () => {
+    document.getElementById('detail-panel').classList.remove('open');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 启动
+// ═══════════════════════════════════════════════════════════════
+loadData();
+</script>
+</body>
+</html>
