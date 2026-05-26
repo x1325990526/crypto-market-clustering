@@ -51,33 +51,29 @@ def run_step(label: str, script: str) -> bool:
         print(f"     请修复 {script} 后重新运行。")
         return False
 
-
-def open_browser_after_delay(url: str, delay: float = 1.5):
+def open_browser_after_delay(port: int, delay: float = 1.5):
+    """延迟打开浏览器，等服务器启动"""
     time.sleep(delay)
+    # 修改此处：将路径指向 frontend/index.html
+    url = f"http://localhost:{port}/frontend/index.html"
     print(f"\n  🌐 浏览器打开：{url}")
     webbrowser.open(url)
 
-
 def start_server():
-    # 服务器根目录 = 项目根目录
-    # index.html 在 frontend/index.html
-    # result.json 在 data/result.json
-    # index.html 里 fetch('../data/result.json') → /data/result.json ✅
-    url = f"http://localhost:{SERVER_PORT}/frontend/index.html"
-
+    """在项目根目录启动 Python 静态服务器"""
     print(f"\n{'═'*60}")
     print(f"  🖥️  启动本地服务器（端口 {SERVER_PORT}）")
-    print(f"  服务根目录：{ROOT_DIR}")
-    print(f"  访问地址：  {url}")
     print(f"  按 Ctrl+C 停止服务器")
     print(f"{'═'*60}\n")
 
-    # 后台线程打开浏览器
-    t = threading.Thread(target=open_browser_after_delay, args=(url,), daemon=True)
+    # 在后台线程中打开浏览器
+    t = threading.Thread(target=open_browser_after_delay, args=(SERVER_PORT,), daemon=True)
     t.start()
 
-    # 从项目根目录启动服务器（关键修复）
-    os.chdir(ROOT_DIR)
+    # 修改此处：获取项目根目录并切换到该目录
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(project_root)
+    
     try:
         subprocess.run([sys.executable, "-m", "http.server", str(SERVER_PORT)])
     except KeyboardInterrupt:
