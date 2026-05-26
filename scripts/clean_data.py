@@ -2,6 +2,7 @@
 clean_data.py  v2
 功能：读取 raw_coins.json → 清洗 → 对数变换（修复极端偏态）→ 标准化 → 保存
 修复：market_cap / total_volume / current_price 分布极右偏，
+     头部资产（如 BTC）的数值与尾部资产存在数万倍的物理差距。
      StandardScaler 无法解决离群值问题，需先做 log1p 变换再标准化。
 """
 
