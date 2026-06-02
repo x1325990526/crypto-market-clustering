@@ -10,17 +10,33 @@ import os
 from datetime import datetime
 
 # ── 配置区（需要修改的参数都在这里）────────────────────────────────────────
-BASE_URL   = "https://api.coingecko.com/api/v3/coins/markets"
+# 1. 您的 CoinGecko API Key
+API_KEY = "CG-8GAzQ9LYTet8qHmwPWThKu3i"  # 请替换为您完整的真实 Key
+
+# 2. 是否为 Pro 付费版账户
+# - False: Demo 计划（免费版），使用 api.coingecko.com 域名
+# - True: Pro 计划（付费版），使用 pro-api.coingecko.com 域名
+IS_PRO = False
+
+# 代理配置（Clash 默认端口通常为 7890 或 7897）
+# 如果不需要代理，可以将其设为 None
+PROXIES = {
+    "http": "http://127.0.0.1:7890",
+    "https": "http://127.0.0.1:7890",
+}
+
+# 根据账户类型自动选择基础 URL
+if IS_PRO:
+    BASE_URL = "https://pro-api.coingecko.com/api/v3/coins/markets"
+else:
+    BASE_URL = "https://api.coingecko.com/api/v3/coins/markets"
+
 VS_CURRENCY = "usd"          # 计价货币
 PER_PAGE   = 250             # 每页最多 250 条（CoinGecko 上限）
-TOTAL_PAGES = 3              # 抓取页数：4 页 × 250 = 1000 条
+TOTAL_PAGES = 4              # 抓取页数：3 页 × 250 = 750 条
 SLEEP_SEC  = 1.5             # 每次请求之间的等待秒数（避免被限速）
 OUTPUT_DIR = "../data"       # 输出目录（相对于 scripts/ 的路径）
 OUTPUT_FILE = "raw_coins.json"
-
-# 抓取的字段（CoinGecko 会自动返回，这里只是说明用）
-# id, symbol, name, current_price, market_cap, total_volume,
-# price_change_percentage_24h, market_cap_rank
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -38,9 +54,25 @@ def fetch_page(page: int) -> list:
         "price_change_percentage": "24h",   # 附带 24h 涨跌幅
     }
 
-    try:
-        response = requests.get(BASE_URL, params=params, timeout=15)
+    # 根据是否是 Pro 账户，组装请求头
+    headers = {
+        "accept": "application/json"
+    }
+    if API_KEY:
+        if IS_PRO:
+            headers["x-cg-pro-api-key"] = API_KEY
+        else:
+            headers["x-cg-demo-api-key"] = API_KEY
 
+    try:
+        # 发送请求时带上 headers 和 proxies
+        response = requests.get(
+            BASE_URL, 
+            params=params, 
+            headers=headers, 
+            proxies=PROXIES,  # 传入代理
+            timeout=15
+        )
         # 检查 HTTP 状态码
         if response.status_code == 429:
             print(f"  ⚠️  第 {page} 页：请求过频（429），等待 10 秒后重试...")
